@@ -1,0 +1,415 @@
+---
+title: "Final Project: A Statistical Analysis of Golfers"
+output: html_document
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+This tutorial will allow the user to see a first hand experience on how data science can be used to take a multitude of data and essentially tell a story using statistical analysis such as linear regression.  The end goal of this tutorial is to see if we can use a combination of the current year's statistics for a golfer to try and predict the next year's scoring average for that golfer.  This tutorial will first take you through the data scraping process followed by collating the data into their respective data frames and then it will show you how to perform several linear regressions and then perform a simple but effective error rate analysis on our models.
+
+This tutorial uses data from the PGA Tour website, specifically from pgatour.com/stats/.  The statistics that were pulled from the PGA tour website are: average driving distance, driving accuracy, greens in regulation, putting, scrambling and scoring.  These 5 statistics along with scoring are considered 5 of the most important statistics in golf so it seemed only fitting that they should be the statistics that are used in this tutorial.  Also, all the data was pulled from the data on the years from 2009-2018.  Further details about all of these statistics will be discussed when they are being analyzed later in this tutorial.
+
+Now, you may be wondering why this tutorial and its approaches with data science have any merit.  Well, one way in which this tutorial is a very useful study is the fact that this study could potentially be used by advertising agencies to give golfers who may not have been good this year a low advertising contract and then the next year when they hit the big time the advertising company will have one of the top golfers under a very inexpensive contract.  And, all of this would be made possible by the existence of a model that can predict the scoring average for the next year of a golfer based on that golfer's current statistics.
+
+The sections of this tutorial will be divided as follows:
+
+I. Data Curation and Parsing
+
+II. Data Management
+
+III. Exploratory Analysis and Hypothesis Testing
+
+IV. Classification
+
+V. Conclusion
+
+VI. Further Readings
+
+
+## I. Data Curation and Parsing
+
+This is the first step of the data science process and it is used to gather viable datasets that can be manipulated later on for statistical analysis.  For this section the technique that is used is called data scraping.  Data scraping is the technique of pulling data from tables on different webpages.  For this project in order to try and minimize the amount of code that needed to be done, first I created a function called read_stats.  The read_stats function is used to scrape data from the webpages on the PGA tour website.  Now, for the purposes of the tutorial that function is what you will want to look at if you are trying to learn how to scrape data from a singular webpage.  Another way that you can speed up the data scraping process if you have to do it through multiple webpages is through the use of for-loops. I combined my function read_stats with several different for-loops to loop through multiple different webpages of statistics and store them in their respective data frames.
+
+```{r part1_step1, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(rvest)
+library(magrittr)
+library(readr)
+
+read_stats <- function(url, yr, c1, c2) {
+  df <- url %>%   
+	read_html() %>%   
+	html_node("#statsTable") %>%   
+	html_table() %>%
+	set_colnames(c1) %>%
+	as_data_frame()
+df = subset(df, select = c2)
+df$year <- yr
+df <- df %>%
+  type_convert(col_types = cols(year = col_integer()))
+return(df)
+}
+
+list_drive <- vector("list", length = 10)
+list_drive_acc <- vector("list", length = 10)
+list_gir <- vector("list", length = 10)
+list_putt <- vector("list", length = 10)
+list_scramble <- vector("list", length = 10)
+list_scoring <- vector("list", length = 10)
+drive_col1 <- c("rank1", "rank2", "name", "rounds", 
+	               "avg_dist", "tot_dist", "tot_drives")
+drive_col2 <- c("name", "rounds", "avg_dist")
+drive_acc_col1 <- c("rank1", "rank2", "name", "rounds", 
+	               "frwy_prc", "frwy_hit", "tot_frwy")
+drive_acc_col2 <- c("name", "rounds", "frwy_prc")
+gir_col1 <- c("rank1", "rank2", "name", "rounds", 
+	               "gir_prc", "greens", "holes", "par")
+gir_col2 <- c("name", "rounds", "gir_prc")
+putt_col1 <- c("rank1", "rank2", "name", "rounds", 
+	               "avg_putt", "gir_putt", "gir", "bc", "gir_rank")
+putt_col2 <- c("name", "rounds", "avg_putt")
+scramble_col1 <- c("rank1", "rank2", "name", "rounds", 
+	               "scramble_prc", "par", "missed")
+scramble_col2 <- c("name", "rounds", "scramble_prc")
+scoring_col1 <- c("rank1", "rank2", "name", "rounds", 
+	               "avg_score", "tot_strokes", "tot_adj", "tot_rounds")
+scoring_col2 <- c("name", "rounds", "avg_score")
+
+
+list_year <- list("2018", "2017", "2016", "2015", "2014", "2013", 
+                  "2012", "2011", "2010", "2009")
+
+
+for (i in 1:10) {
+  url <- paste("https://www.pgatour.com/stats/stat.101.", list_year[i], ".html", sep = "")
+  list_drive[[i]] <- read_stats(url, (2019-i), drive_col1, drive_col2)
+}
+for (i in 1:10) {
+  url <- paste("https://www.pgatour.com/stats/stat.102.", list_year[i], ".html", sep = "")
+  list_drive_acc[[i]] <- read_stats(url, (2019-i), drive_acc_col1, drive_acc_col2)
+}
+for (i in 1:10) {
+  url <- paste("https://www.pgatour.com/stats/stat.103.", list_year[i], ".html", sep = "")
+  list_gir[[i]] <- read_stats(url, (2019-i), gir_col1, gir_col2)
+}
+for (i in 1:10) {
+  url <- paste("https://www.pgatour.com/stats/stat.104.", list_year[i], ".html", sep = "")
+  list_putt[[i]] <- read_stats(url, (2019-i), putt_col1, putt_col2)
+}
+for (i in 1:10) {
+  url <- paste("https://www.pgatour.com/stats/stat.130.", list_year[i], ".html", sep = "")
+  list_scramble[[i]] <- read_stats(url, (2019-i), scramble_col1, scramble_col2)
+}
+for (i in 1:10) {
+  url <- paste("https://www.pgatour.com/stats/stat.120.", list_year[i], ".html", sep = "")
+  list_scoring[[i]] <- read_stats(url, (2019-i), scoring_col1, scoring_col2)
+}
+```
+
+## II. Data Management
+
+The next part of this tutorial is the data management section. This portion is very important to the data science process because it allows us to convert our data frames into several different forms that makes it a lot easier to analyze the information that we scraped from the first part of this tutorial.  The first step in this section is to take the separate data files that correspond to the statistics for each year and then merge them into one full stat data frame for each year.  Then after we join all of the data frames they have duplicate columns of the year variable so we just want to create a subset of the columns to delete some of the year columns.  The third step of the data management part is to connect the next year scoring column to each year's data frame.  The final step of this section is to use Reduce along with merge to combine all of the data frames into one large master data frame that will be used to create our predictions and perform our linear regression analysis on.
+
+```{r merging_data, message=FALSE, warning=FALSE}
+library(plyr)
+
+stats_2018 <- join_all(list(list_drive[[1]], list_drive_acc[[1]], list_gir[[1]], list_putt[[1]], list_scramble[[1]], list_scoring[[1]]), by = c("name", "rounds"))
+
+stats_2017 <- join_all(list(list_drive[[2]], list_drive_acc[[2]], list_gir[[2]], list_putt[[2]], list_scramble[[2]], list_scoring[[2]]), by = c("name", "rounds"))
+
+stats_2016 <- join_all(list(list_drive[[3]], list_drive_acc[[3]], list_gir[[3]], list_putt[[3]], list_scramble[[3]], list_scoring[[3]]), by = c("name", "rounds"))
+
+stats_2015 <- join_all(list(list_drive[[4]], list_drive_acc[[4]], list_gir[[4]], list_putt[[4]], list_scramble[[4]], list_scoring[[4]]), by = c("name", "rounds"))
+
+stats_2014 <- join_all(list(list_drive[[5]], list_drive_acc[[5]], list_gir[[5]], list_putt[[5]], list_scramble[[5]], list_scoring[[5]]), by = c("name", "rounds"))
+
+stats_2013 <- join_all(list(list_drive[[6]], list_drive_acc[[6]], list_gir[[6]], list_putt[[6]], list_scramble[[6]], list_scoring[[6]]), by = c("name", "rounds"))
+
+stats_2012 <- join_all(list(list_drive[[7]], list_drive_acc[[7]], list_gir[[7]], list_putt[[7]], list_scramble[[7]], list_scoring[[7]]), by = c("name", "rounds"))
+
+stats_2011 <- join_all(list(list_drive[[8]], list_drive_acc[[8]], list_gir[[8]], list_putt[[8]], list_scramble[[8]], list_scoring[[8]]), by = c("name", "rounds"))
+
+stats_2010 <- join_all(list(list_drive[[9]], list_drive_acc[[9]], list_gir[[9]], list_putt[[9]], list_scramble[[9]], list_scoring[[9]]), by = c("name", "rounds"))
+
+stats_2009 <- join_all(list(list_drive[[10]], list_drive_acc[[10]], list_gir[[10]], list_putt[[10]], list_scramble[[10]], list_scoring[[10]]), by = c("name", "rounds"))
+
+stats_2018 = subset(stats_2018, select = c(1,2,4,3,5,7,9,11,13))
+stats_2017 = subset(stats_2017, select = c(1,2,4,3,5,7,9,11,13))
+stats_2016 = subset(stats_2016, select = c(1,2,4,3,5,7,9,11,13))
+stats_2015 = subset(stats_2015, select = c(1,2,4,3,5,7,9,11,13))
+stats_2014 = subset(stats_2014, select = c(1,2,4,3,5,7,9,11,13))
+stats_2013 = subset(stats_2013, select = c(1,2,4,3,5,7,9,11,13))
+stats_2012 = subset(stats_2012, select = c(1,2,4,3,5,7,9,11,13))
+stats_2011 = subset(stats_2011, select = c(1,2,4,3,5,7,9,11,13))
+stats_2010 = subset(stats_2010, select = c(1,2,4,3,5,7,9,11,13))
+stats_2009 = subset(stats_2009, select = c(1,2,4,3,5,7,9,11,13))
+stats_2017$next_year_scoring <- stats_2018$avg_score[match(stats_2017$name, stats_2018$name)]
+stats_2016$next_year_scoring <- stats_2017$avg_score[match(stats_2016$name, stats_2017$name)]
+stats_2015$next_year_scoring <- stats_2016$avg_score[match(stats_2015$name, stats_2016$name)]
+stats_2014$next_year_scoring <- stats_2015$avg_score[match(stats_2014$name, stats_2015$name)]
+stats_2013$next_year_scoring <- stats_2014$avg_score[match(stats_2013$name, stats_2014$name)]
+stats_2012$next_year_scoring <- stats_2013$avg_score[match(stats_2012$name, stats_2013$name)]
+stats_2011$next_year_scoring <- stats_2012$avg_score[match(stats_2011$name, stats_2012$name)]
+stats_2010$next_year_scoring <- stats_2011$avg_score[match(stats_2010$name, stats_2011$name)]
+stats_2009$next_year_scoring <- stats_2010$avg_score[match(stats_2009$name, stats_2010$name)]
+
+
+total_stats <- Reduce(function(x,y) merge(x, y, all=TRUE), list(stats_2017, stats_2016, stats_2015, stats_2014, stats_2013, stats_2012, stats_2011, stats_2010, stats_2009))
+
+```
+
+## III. Exploratory Analysis and Hypothesis Testing
+
+For the next several blocks of code this tutorial performs linear regression analysis on each of the individual statistics on the player's scoring average for the current year.  The purpose for this is to prove that each of the statistics has at least some level of significance in calculating the scoring average for the current year.  The reason that we start with the current year instead of the next year's scoring average is because first we have to prove that the stats that I chose at least have a correlation to a player's score in the first place because if they don't then we wouldn't be able to prove that they can predict the player's next year's scoring average.
+
+The first linear regression that is performed is on driving average and score.  Now, driving average represents the average distance of drives in which the golfer used their driver.  This statistic can be important for a golfer because it allows them to be closer for their second shot of the hole, which usually leads to more accuracy later on in the hole.  The plot and linear regression model for this are displayed below:
+
+```{r drive}
+library(broom)
+
+total_stats %>%
+  ggplot(mapping=aes(x=avg_dist, y=avg_score)) +
+    geom_point() +
+    geom_smooth(method = lm)
+
+model_drive <- tidy(lm(avg_score~avg_dist, data = total_stats))
+
+model_drive
+
+```
+We can see from this model that we can reject the null hypothesis for driving distance because the p-value is extremely low.
+
+
+The second linear regression that is performed is on driving accuracy and score.  Now, driving accuracy represents the percentage of drives in which the golfer lands their ball on the fairway.  This statistic can be important for a golfer's score because hitting from the fairway allows the golfer to have more control over the spin and distance of their next shot.  The plot and linear regression model for this are displayed below:
+
+```{r drive_acc}
+total_stats %>%
+  ggplot(mapping=aes(x=frwy_prc, y=avg_score)) +
+    geom_point() +
+    geom_smooth(method = lm)
+
+model_drive_acc <- tidy(lm(avg_score~frwy_prc, data = total_stats))
+
+model_drive_acc
+
+```
+We can see from this model that we can reject the null hypothesis for driving accuracy because the p-value is extremely low.
+
+
+
+The third linear regression that is performed is on greens in regulation and score.  Now, greens in regulation represents the percentage of holes in which the golfer lands on the green in the regulation amount of shots.  This means the golfer landed on the green with 2 strokes left to get par, e.g landing on a par 3 on your first shot, landing on a par 4 on your second shot and landing on a par 5  on your third shot.  This statistic can be important for a golfer because it shows that they are very accurate on their approach shots to the green.  The plot and linear regression model for this are displayed below:
+
+```{r gir}
+total_stats %>%
+  ggplot(mapping=aes(x=gir_prc, y=avg_score)) +
+    geom_point() +
+    geom_smooth(method = lm)
+
+model_gir <- tidy(lm(avg_score~gir_prc, data = total_stats))
+
+model_gir
+
+```
+We can see from this model that we can reject the null hypothesis for greens in regulation because the p-value is extremely low.
+
+
+
+The fourth linear regression that is performed is on putting average and score.  Now, putting average represents the average amount of putts for a golfer on any hole in which they reached the green in regulation.  The reason why I did not use the putting average for all the holes is because in certain situations when people chip onto the green because they don't get on to the green in regulation, they could end up a lot closer to the hole and lead the to a better chance at having only one putt for that hole.  However, this is not an accurate portrayal of a golfer's putting ability.  This statistic can be important for a golfer because it shows that they are very good at making longer more difficult putt and this usually leads to a better score.  The plot and linear regression model for this are displayed below:
+
+```{r putt}
+total_stats %>%
+  ggplot(mapping=aes(x=avg_putt, y=avg_score)) +
+    geom_point() +
+    geom_smooth(method = lm)
+
+model_putt <- tidy(lm(avg_score~avg_putt, data = total_stats))
+
+model_putt
+
+```
+We can see from this model that we can reject the null hypothesis for putting average because the p-value is extremely low.
+
+
+
+The fifth linear regression that is performed is on scrambling and score.  Now, scrambling represents the percent of times in which a golfer does not make it to the green in regulation but still manages to a get a par on that hole.  This statistic can be important for golfers because it shows that even if they mess up on one shot they can still manage to recover.  The plot and linear regression model for this are displayed below:
+
+```{r scramble}
+total_stats %>%
+  ggplot(mapping=aes(x=scramble_prc, y=avg_score)) +
+    geom_point() +
+    geom_smooth(method = lm)
+
+model_scramble <- tidy(lm(avg_score~scramble_prc, data = total_stats))
+
+model_scramble
+
+```
+We can see from this model that we can reject the null hypothesis for scrambling because the p-value is extremely low.
+
+
+The next part of this tutorial we run a linear regression model to make sure when we combine all of them together that they provide an accurate representation of the score of a golfer.
+
+```{r model1}
+library(broom)
+model1 <- lm(avg_score~avg_dist+frwy_prc+gir_prc+avg_putt+scramble_prc, data = total_stats)
+
+model_output <- tidy(model1)
+
+model_output
+
+```
+As we can see from the model above, we can reject the null hypothesis for every single variable when they are combined together to predict the scoring average because all of their p-values are very low.
+
+## IV. Classification
+
+For this section of the tuorial, we test out our classification model on predicted the current year's scoring average for a player.  Then the classification goes on to try and attempt at classifying the player's next year's scoring average.  This will be discussed later on.
+
+Below, is a table that displays a test our linear model's error rate for predicted a player's scoring average.  For the purposes of this analysis, I rounded the predicted scoring average and the observed scoring average.  This way we could look at the integers for score as a kind of class.  Then our linear regression model is a kind of classification system.
+```{r classifier}
+total_stats <- total_stats %>%
+  mutate( predicted_scoring_avg = predict(model1) )
+
+total_stats <- total_stats %>%
+  mutate( rounded_predicted_scoring_avg = round(predicted_scoring_avg) ) %>%
+  mutate( rounded_scoring_avg = round(avg_score))
+
+
+table(pred=total_stats$rounded_predicted_scoring_avg, observed=total_stats$rounded_scoring_avg)
+```
+As we can see, in this table the actual values (observed values) are on top of the table and then what our model predicted for that player are on the right.  When these values line up that is a correct predictions from our model and when the number do not line up that is an incorrect prediction from our model.  So then the error rate for our predictions is 468/1669, which is 28%.  So this means that for an initial model of predicting score our model predicts 72% of golfer's scores for the current year.
+
+
+Next, we try and test the same model on the next years stats and that is displayed below.
+```{r model2}
+library(broom)
+
+total_stats2 <- na.omit(total_stats)
+
+model2 <- lm(next_year_scoring~avg_dist+frwy_prc+gir_prc+avg_putt+scramble_prc, data = total_stats2)
+
+model2_output <- tidy(model2)
+
+model2_output
+
+
+```
+As we can see every variable still rejects the null test because they all have low p-values.
+
+
+```{r classifier2}
+total_stats2 <- total_stats2 %>%
+  mutate( predicted_scoring_avg_next_year = predict(model2) )
+
+total_stats2 <- total_stats2 %>%
+  mutate( rounded_predicted_scoring_avg_next_year = round(predicted_scoring_avg_next_year) ) %>%
+  mutate( rounded_scoring_avg_next_year = round(next_year_scoring))
+
+
+table(pred=total_stats2$rounded_predicted_scoring_avg_next_year, observed=total_stats2$rounded_scoring_avg_next_year)
+```
+Now, for predicting a golfers next year's score, our model has an error rate of 542/1275, which is 42%. So, as you can see this error rate is significantly higher than the error rate for predicting a golfer's current year's score.  Because of this the next part of this tutorial is just repeated the first exploratory analysis of this tutorial but for a golfer's next year's score.  For all of the statistics they all reject the null hypothesis because they all have low p-values.
+
+
+```{r drive2}
+library(broom)
+
+total_stats2 %>%
+  ggplot(mapping=aes(x=avg_dist, y=next_year_scoring)) +
+    geom_point() +
+    geom_smooth(method = lm)
+
+model_drive2 <- tidy(lm(next_year_scoring~avg_dist, data = total_stats2))
+
+model_drive2
+
+```
+
+```{r drive_acc2}
+total_stats2 %>%
+  ggplot(mapping=aes(x=frwy_prc, y=next_year_scoring)) +
+    geom_point() +
+    geom_smooth(method = lm)
+
+model_drive_acc2 <- tidy(lm(next_year_scoring~frwy_prc, data = total_stats2))
+
+model_drive_acc2
+
+```
+
+```{r gir2}
+total_stats2 %>%
+  ggplot(mapping=aes(x=gir_prc, y=next_year_scoring)) +
+    geom_point() +
+    geom_smooth(method = lm)
+
+model_gir2 <- tidy(lm(next_year_scoring~gir_prc, data = total_stats2))
+
+model_gir2
+
+```
+
+```{r putt2}
+total_stats2 %>%
+  ggplot(mapping=aes(x=avg_putt, y=next_year_scoring)) +
+    geom_point() +
+    geom_smooth(method = lm)
+
+model_putt2 <- tidy(lm(next_year_scoring~avg_putt, data = total_stats2))
+
+model_putt2
+
+```
+
+```{r scramble2}
+total_stats2 %>%
+  ggplot(mapping=aes(x=scramble_prc, y=next_year_scoring)) +
+    geom_point() +
+    geom_smooth(method = lm)
+
+model_scramble2 <- tidy(lm(next_year_scoring~scramble_prc, data = total_stats2))
+
+model_scramble2
+```
+
+After performing the exploratory analysis for a golfer's next year's score, I decided to combine average putting and scrambling because those two abilities are linked on a golf course for the success of a golfer.  Below is the model for this change.
+
+```{r model3}
+library(broom)
+
+model3 <- lm(next_year_scoring~avg_dist+frwy_prc+gir_prc+avg_putt*scramble_prc, data = total_stats2)
+
+model3_output <- tidy(model3)
+
+model3_output
+
+
+total_stats2 <- total_stats2 %>%
+  mutate( predicted_scoring_avg_next_year2 = predict(model3) )
+```
+As we can see all of the variables still reject the null hypothesis test because of their low p-values.
+
+Below is a table that displays our new prediction model and its accuracy.
+```{r classifier3}
+total_stats2 <- total_stats2 %>%
+  mutate( rounded_predicted_scoring_avg_next_year2 = round(predicted_scoring_avg_next_year2) )
+
+
+table(pred=total_stats2$rounded_predicted_scoring_avg_next_year2, observed=total_stats2$rounded_scoring_avg_next_year)
+
+```
+Now, with our new updated model our error rate is 532/1274, which is 41%.  So, as we can see this addition to our model improved accuracy, but only by a little bit.  Additions to your model may improve accuracy so it is always best to test many versions of possible models if you are performing a data science project.
+
+## V. Conclusion
+Overall, throughout this data science process we may not have been able to accurately predict the golfer's next year's score, but we were able to establish how to create a data science project as well as ways to analyze your data and then create a model from this analysis.  I hope you have enjoyed reading this and good luck on any of your future projects.
+
+## VI. Further Readings
+
+https://www.golfdigest.com/story/gwar-shotlink-feature-david-barrett-0113
+
+http://journals.sagepub.com/doi/abs/10.1260/174795407789705424?journalCode=spoa
+
+https://anova.golf/ 
+
